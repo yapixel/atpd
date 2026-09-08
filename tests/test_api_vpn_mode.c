@@ -36,6 +36,9 @@ static void apply_state(api_ctx_t *ctx, vpn_state_t state, const char *iface) {
 
 static singbox_clash_mode_status_t mock_status;
 static int set_calls;
+static int fail_mode_reads;
+static int fail_mode_sets;
+static api_ctx_t *reconnect_on_failure;
 static char last_set_mode[SINGBOX_CLASH_MODE_SIZE];
 
 #define CHECK(condition) do { \
@@ -94,12 +97,24 @@ int singbox_api_get_clash_mode(singbox_api_ctx_t *ctx, char *mode, size_t size) 
 int singbox_api_get_clash_mode_status(singbox_api_ctx_t *ctx,
                                       singbox_clash_mode_status_t *status) {
     (void)ctx;
+    if (fail_mode_reads > 0) {
+        fail_mode_reads--;
+        return -1;
+    }
     *status = mock_status;
     return 0;
 }
 int singbox_api_set_clash_mode(singbox_api_ctx_t *ctx, const char *mode) {
     (void)ctx;
     set_calls++;
+    if (fail_mode_sets > 0) {
+        fail_mode_sets--;
+        if (reconnect_on_failure) {
+            api_vpn_mode_callback(VPN_STATE_READY, "tun0", reconnect_on_failure);
+            reconnect_on_failure = NULL;
+        }
+        return -1;
+    }
     snprintf(last_set_mode, sizeof(last_set_mode), "%s", mode);
     snprintf(mock_status.current_mode, sizeof(mock_status.current_mode), "%s", mode);
     return 0;
@@ -107,6 +122,12 @@ int singbox_api_set_clash_mode(singbox_api_ctx_t *ctx, const char *mode) {
 
 static void set_current_mode(const char *mode) {
     snprintf(mock_status.current_mode, sizeof(mock_status.current_mode), "%s", mode);
+}
+
+static void next_worker_round(void) {
+    unsigned next = refresh_entered + 1;
+    release_refresh();
+    wait_refresh(next);
 }
 
 int main(void) {
@@ -172,6 +193,53 @@ int main(void) {
     CHECK(strcmp(last_set_mode, "Google VPN") == 0);
     apply_state(&ctx, VPN_STATE_IDLE, "");
     CHECK(strcmp(last_set_mode, "Global") == 0);
+
+    snprintf(config.interface.vpn_target_mode,
+             sizeof(config.interface.vpn_target_mode), "Google VPN");
+    apply_state(&ctx, VPN_STATE_READY, "tun0");
+    fail_mode_reads = 1;
+    apply_state(&ctx, VPN_STATE_IDLE, "");
+    CHECK(strcmp(ctx.default_mode, "Global") == 0);
+    CHECK(strcmp(mock_status.current_mode, "Google VPN") == 0);
+    next_worker_round(); /* No new VPN event is needed. */
+    CHECK(strcmp(mock_status.current_mode, "Global") == 0);
+    CHECK(ctx.default_mode[0] == '\0');
+
+    apply_state(&ctx, VPN_STATE_READY, "tun0");
+    fail_mode_sets = 2;
+    apply_state(&ctx, VPN_STATE_IDLE, "");
+    CHECK(strcmp(ctx.default_mode, "Global") == 0);
+    next_worker_round();
+    CHECK(strcmp(mock_status.current_mode, "Google VPN") == 0);
+    CHECK(strcmp(ctx.default_mode, "Global") == 0);
+    next_worker_round();
+    CHECK(strcmp(mock_status.current_mode, "Global") == 0);
+    CHECK(ctx.default_mode[0] == '\0');
+    calls_before = set_calls;
+    next_worker_round();
+    CHECK(set_calls == calls_before); /* Success stops retries. */
+
+    apply_state(&ctx, VPN_STATE_READY, "tun0");
+    fail_mode_sets = 1;
+    reconnect_on_failure = &ctx;
+    apply_state(&ctx, VPN_STATE_IDLE, "");
+    calls_before = set_calls;
+    next_worker_round(); /* New READY supersedes the failed in-flight IDLE. */
+    CHECK(set_calls == calls_before);
+    CHECK(strcmp(mock_status.current_mode, "Google VPN") == 0);
+    CHECK(strcmp(ctx.default_mode, "Global") == 0);
+    apply_state(&ctx, VPN_STATE_IDLE, "");
+    CHECK(strcmp(mock_status.current_mode, "Global") == 0);
+
+    /* Connection-time read failures must also retry and save the old mode. */
+    fail_mode_reads = 1;
+    apply_state(&ctx, VPN_STATE_READY, "tun0");
+    CHECK(ctx.default_mode[0] == '\0');
+    next_worker_round();
+    CHECK(strcmp(ctx.default_mode, "Global") == 0);
+    CHECK(strcmp(mock_status.current_mode, "Google VPN") == 0);
+    apply_state(&ctx, VPN_STATE_IDLE, "");
+    CHECK(strcmp(mock_status.current_mode, "Global") == 0);
 
     release_refresh();
     api_cleanup(&ctx);
