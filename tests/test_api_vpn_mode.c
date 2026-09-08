@@ -4,6 +4,35 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
+
+/* Park each refresh inside a Native API call, with native_lock held. */
+static pthread_mutex_t refresh_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t refresh_changed = PTHREAD_COND_INITIALIZER;
+static unsigned refresh_entered;
+static unsigned refresh_released;
+
+static void wait_refresh(unsigned round) {
+    pthread_mutex_lock(&refresh_lock);
+    while (refresh_entered < round)
+        pthread_cond_wait(&refresh_changed, &refresh_lock);
+    pthread_mutex_unlock(&refresh_lock);
+}
+
+static void release_refresh(void) {
+    pthread_mutex_lock(&refresh_lock);
+    refresh_released = refresh_entered;
+    pthread_cond_broadcast(&refresh_changed);
+    pthread_mutex_unlock(&refresh_lock);
+}
+
+static void apply_state(api_ctx_t *ctx, vpn_state_t state, const char *iface) {
+    unsigned next = refresh_entered + 1;
+    /* This must return even though the worker holds native_lock. */
+    api_vpn_mode_callback(state, iface, ctx);
+    release_refresh();
+    wait_refresh(next);
+}
 
 static singbox_clash_mode_status_t mock_status;
 static int set_calls;
@@ -35,7 +64,7 @@ void singbox_api_cleanup(singbox_api_ctx_t *ctx) { (void)ctx; }
 int reactor_add_fd(reactor_t *r, int fd, uint32_t events,
                    reactor_io_cb cb, void *userdata) {
     (void)r; (void)fd; (void)events; (void)cb; (void)userdata;
-    return -1;
+    return 0;
 }
 int reactor_remove_fd(reactor_t *r, int fd) { (void)r; (void)fd; return 0; }
 uint64_t reactor_now_ms(void) { return 0; }
@@ -43,6 +72,12 @@ int singbox_api_health_check(singbox_api_ctx_t *ctx) { (void)ctx; return 0; }
 int singbox_api_get_status(singbox_api_ctx_t *ctx, singbox_status_t *status) {
     (void)ctx;
     (void)status;
+    pthread_mutex_lock(&refresh_lock);
+    unsigned round = ++refresh_entered;
+    pthread_cond_broadcast(&refresh_changed);
+    while (refresh_released < round)
+        pthread_cond_wait(&refresh_changed, &refresh_lock);
+    pthread_mutex_unlock(&refresh_lock);
     return -1;
 }
 int singbox_api_get_version(singbox_api_ctx_t *ctx, char *version, size_t size) {
@@ -75,6 +110,7 @@ static void set_current_mode(const char *mode) {
 }
 
 int main(void) {
+    alarm(20);
     api_ctx_t ctx = {0};
     atp_config_t config = {0};
     CHECK(api_init(&ctx, &config) == 0);
@@ -91,34 +127,55 @@ int main(void) {
     }
 
     set_current_mode("Global");
-    api_vpn_mode_callback(VPN_STATE_READY, "tun0", &ctx);
+    reactor_t *reactor = (reactor_t *)&config; /* Registration stub only. */
+    CHECK(api_start_with_reactor(&ctx, reactor) == 0);
+    wait_refresh(1);
+    apply_state(&ctx, VPN_STATE_READY, "tun0");
     CHECK(strcmp(ctx.default_mode, "Global") == 0);
     CHECK(strcmp(last_set_mode, "Google VPN") == 0);
-    api_vpn_mode_callback(VPN_STATE_IDLE, "", &ctx);
+    apply_state(&ctx, VPN_STATE_IDLE, "");
     CHECK(strcmp(last_set_mode, "Global") == 0);
     CHECK(ctx.default_mode[0] == '\0');
 
     set_current_mode("Direct");
-    api_vpn_mode_callback(VPN_STATE_READY, "wg0", &ctx);
+    apply_state(&ctx, VPN_STATE_READY, "wg0");
     CHECK(strcmp(ctx.default_mode, "Direct") == 0);
-    api_vpn_mode_callback(VPN_STATE_IDLE, "", &ctx);
+    apply_state(&ctx, VPN_STATE_IDLE, "");
     CHECK(strcmp(last_set_mode, "Direct") == 0);
     CHECK(ctx.default_mode[0] == '\0');
 
     int calls_before = set_calls;
     set_current_mode("Google VPN");
-    api_vpn_mode_callback(VPN_STATE_READY, "ipsec0", &ctx);
+    apply_state(&ctx, VPN_STATE_READY, "ipsec0");
     CHECK(strcmp(ctx.default_mode, "Google VPN") == 0);
     CHECK(set_calls == calls_before);
-    api_vpn_mode_callback(VPN_STATE_IDLE, "", &ctx);
+    apply_state(&ctx, VPN_STATE_IDLE, "");
     CHECK(set_calls == calls_before);
     CHECK(ctx.default_mode[0] == '\0');
 
     set_current_mode("Global");
-    api_vpn_mode_callback(VPN_STATE_IDLE, "", &ctx);
+    apply_state(&ctx, VPN_STATE_IDLE, "");
     CHECK(set_calls == calls_before);
 
+    /* A READY superseded before the worker is available must not switch mode. */
+    api_vpn_mode_callback(VPN_STATE_READY, "tun0", &ctx);
+    apply_state(&ctx, VPN_STATE_IDLE, "");
+    CHECK(set_calls == calls_before);
+
+    /* The worker uses the submitted settings, not a later config mutation. */
+    api_vpn_mode_callback(VPN_STATE_READY, "tun0", &ctx);
+    snprintf(config.interface.vpn_target_mode,
+             sizeof(config.interface.vpn_target_mode), "Direct");
+    unsigned next = refresh_entered + 1;
+    release_refresh();
+    wait_refresh(next);
+    CHECK(strcmp(last_set_mode, "Google VPN") == 0);
+    apply_state(&ctx, VPN_STATE_IDLE, "");
+    CHECK(strcmp(last_set_mode, "Global") == 0);
+
+    release_refresh();
     api_cleanup(&ctx);
+    alarm(0);
     puts("VPN mode state tests passed");
     return 0;
 }

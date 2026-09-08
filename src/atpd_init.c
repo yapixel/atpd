@@ -39,6 +39,7 @@ static void cleanup_service(atpd_init_context_t *ctx) {
 }
 
 static void cleanup_api(atpd_init_context_t *ctx) {
+    if (ctx->service) ctx->service->api = NULL;
     if (ctx->api) {
         atpd_set_vpn_mode_callback(NULL, NULL);
         api_cleanup(ctx->api);
@@ -197,6 +198,7 @@ int atpd_init_phase_api(atpd_init_context_t *ctx) {
         api_cleanup(ctx->api);
         return -1;
     }
+    if (ctx->service) ctx->service->api = ctx->api;
     
     return 0;
 }

@@ -771,11 +771,7 @@ static int do_status(atp_options_t *opts) {
     if (query_daemon("status\n") == 0) return 0;
 
     /* 2. Standalone Fallback: Offline inspection when daemon is stopped */
-    service_ctx_t local_svc;
-    memset(&local_svc, 0, sizeof(local_svc));
-    service_init(&local_svc, &daemon_config);
-
-    status_show_to(stdout, opts->no_color, &daemon_config, &local_svc, NULL);
+    status_show_to(stdout, opts->no_color, &daemon_config, NULL, NULL);
     return 0;
 }
 

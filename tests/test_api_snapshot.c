@@ -151,8 +151,12 @@ int main(void) {
     CHECK(reactor_add_timer(reactor, 4000, 0, stop_cb, NULL) != NULL);
     CHECK(reactor_run(reactor) == 0);
 
-    api.snapshot.updated_at_ms = reactor_now_ms() - 9000;
     api_snapshot_t stale;
+    /* Include a mode read/write before the next three-RPC refresh. */
+    api.snapshot.updated_at_ms = reactor_now_ms() - 11000;
+    CHECK(api_get_snapshot(&api, &stale) == 0);
+    CHECK(stale.valid);
+    api.snapshot.updated_at_ms = reactor_now_ms() - 13000;
     CHECK(api_get_snapshot(&api, &stale) == 0);
     CHECK(!stale.valid);
     CHECK(!stale.version_valid);

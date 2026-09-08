@@ -69,6 +69,7 @@ struct service_ctx_t {
     int stop_timeout_sec;
     int grace_period_sec;
     reactor_t *reactor;
+    const struct api_ctx_s *api; /* Borrowed; read snapshots on the reactor only. */
     reactor_timer_t *monitor_timer;
     reactor_timer_t *retry_timer;
     reactor_timer_t *health_timer;
@@ -91,6 +92,7 @@ int service_validate_config(service_ctx_t *ctx);
 int service_wait_ready(service_ctx_t *ctx);
 int service_stop_async(service_ctx_t *ctx, void (*done_cb)(service_ctx_t *, void *), void *userdata);
 int service_stop_sync(service_ctx_t *ctx);
+/* Stops the service and frees internal resources and ctx itself (heap only). */
 void service_destroy(service_ctx_t *ctx);
 int service_get_pid(service_ctx_t *ctx);
 int service_is_running(service_ctx_t *ctx);

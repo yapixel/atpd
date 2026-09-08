@@ -8,6 +8,7 @@
  */
 
 #include "service.h"
+#include "api.h"
 #include "service_credentials.h"
 #include "logger.h"
 #include "utils.h"
@@ -20,11 +21,8 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <poll.h>
-#include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 #include <grp.h>
 #include <time.h>
 #include <libgen.h>
@@ -150,32 +148,6 @@ static void circuit_breaker_record_success(circuit_breaker_t *cb) {
     }
 }
 
-static int wait_connect_result(int sock, int timeout_ms) {
-    struct pollfd pfd = {
-        .fd = sock,
-        .events = POLLOUT
-    };
-
-    int ret = poll(&pfd, 1, timeout_ms);
-    if (ret <= 0) return 0;
-
-    if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
-        return 0;
-    }
-
-    if (!(pfd.revents & POLLOUT)) {
-        return 0;
-    }
-
-    int err = 0;
-    socklen_t len = sizeof(err);
-    if (getsockopt(sock, SOL_SOCKET, SO_ERROR, &err, &len) < 0) {
-        return 0;
-    }
-
-    return err == 0;
-}
-
 static int validate_process(service_ctx_t *ctx, pid_t pid) {
     unsigned long long starttime = 0;
     if (!ctx || pid <= 0 || !process_exists(pid) ||
@@ -271,43 +243,6 @@ static int service_probe_native_api(service_ctx_t *ctx) {
 
     if (singbox_api_get_status(&api_ctx, &status) != 0) return 0;
     return service_starting_child_alive(ctx);
-}
-
-static int service_api_health_check(service_ctx_t *ctx) {
-    int sock = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
-    if (sock < 0) return 0;
-
-    struct timeval tv = { .tv_sec = 2, .tv_usec = 0 };
-    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
-        close(sock);
-        return 0;
-    }
-    if (setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0) {
-        close(sock);
-        return 0;
-    }
-
-    struct sockaddr_in addr = {
-        .sin_family = AF_INET,
-        .sin_port = htons(ctx->api_port),
-        .sin_addr = { .s_addr = htonl(INADDR_LOOPBACK) }
-    };
-
-    int ret = connect(sock, (struct sockaddr *)&addr, sizeof(addr));
-
-    if (ret == 0) {
-        close(sock);
-        return 1;
-    }
-
-    if (errno == EINPROGRESS) {
-        int ok = wait_connect_result(sock, 2000);
-        close(sock);
-        return ok;
-    }
-
-    close(sock);
-    return 0;
 }
 
 static int service_binary_exists(service_ctx_t *ctx) {
@@ -864,7 +799,9 @@ void service_health_check_cb(reactor_t *r, reactor_timer_t *timer, void *userdat
         return;
     }
 
-    int healthy = service_api_health_check(ctx);
+    api_snapshot_t snapshot;
+    int healthy = api_get_snapshot(ctx->api, &snapshot) == 0 &&
+                  snapshot.valid && snapshot.updated_at_ms >= ctx->start_time_ms;
     ctx->running_healthy = healthy;
     ctx->last_health_check = time(NULL);
 

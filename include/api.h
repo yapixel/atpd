@@ -24,16 +24,27 @@ typedef struct {
     char clash_mode[SINGBOX_CLASH_MODE_SIZE];
 } api_snapshot_t;
 
+typedef struct {
+    vpn_state_t state;
+    char target_mode[SINGBOX_CLASH_MODE_SIZE];
+    char fallback_mode[SINGBOX_CLASH_MODE_SIZE];
+} api_vpn_request_t;
+
 typedef struct api_ctx_s {
     singbox_api_ctx_t native_ctx;
     const atp_config_t *config;
-    char default_mode[SINGBOX_CLASH_MODE_SIZE];
+    char default_mode[SINGBOX_CLASH_MODE_SIZE]; /* Worker-owned restore mode. */
     api_snapshot_t snapshot;
     reactor_t *reactor;
     pthread_t refresh_worker;
     pthread_mutex_t native_lock;
+    /* Mailbox lock is never held across Native API calls. */
+    pthread_mutex_t request_lock;
+    api_vpn_request_t vpn_request;
+    bool vpn_pending;
+    bool stopping;
     int result_pipe[2];
-    int stop_fd;
+    int wake_fd;
     bool initialized;
     bool worker_started;
     bool result_registered;

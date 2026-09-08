@@ -213,6 +213,13 @@ proc_starttime() {
     printf '%s\n' "$1"
 }
 
+printf '%s\n' '=== offline status needs no service owner ==='
+"$ATPD_BIN" -c "$root/atp.conf" status >"$root/offline-status.out"
+grep -q 'STATUS.*STOPPED' "$root/offline-status.out"
+[ ! -e "$root/run/atpd.pid" ]
+[ ! -e "$root/run/sing-box.pid" ]
+[ ! -e "$root/commands" ]
+
 printf '%s\n' '=== config check failure blocks startup ==='
 if MOCK_FAIL_CONFIG=1 run_atp start >"$root/config-fail.out" 2>"$root/config-fail.err"; then
     echo "start unexpectedly succeeded" >&2; exit 1
@@ -480,5 +487,6 @@ wait "$identity_pid" 2>/dev/null || true
 rm -f "$root/identity/run/atpd.pid"
 
 sh tests/test_reload_transaction_unit.sh
+sh tests/test_service_health.sh
 
 printf '%s\n' 'start/restart startup regression tests passed'

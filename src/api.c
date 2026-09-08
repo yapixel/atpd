@@ -23,19 +23,20 @@
 
 #define API_REFRESH_INTERVAL_MS 1000
 #define API_REFRESH_RPC_COUNT 3
+#define API_VPN_RPC_COUNT 2
 /* Each local Native API RPC has a bounded 1s connect wait and 1s socket I/O
- * timeout.  A snapshot must survive one complete serial refresh round, the
- * refresh wait, and a small scheduling margin. */
+ * timeout. A snapshot must survive a VPN mode read/write, one complete serial
+ * refresh round, the refresh wait, and a small scheduling margin. */
 #define API_REFRESH_RPC_BUDGET_MS 2000
 #define API_SNAPSHOT_STALE_MARGIN_MS 1000
 #define API_SNAPSHOT_STALE_MS \
     (API_REFRESH_INTERVAL_MS + \
-     API_REFRESH_RPC_COUNT * API_REFRESH_RPC_BUDGET_MS + \
+     (API_REFRESH_RPC_COUNT + API_VPN_RPC_COUNT) * API_REFRESH_RPC_BUDGET_MS + \
      API_SNAPSHOT_STALE_MARGIN_MS)
 
 _Static_assert(API_SNAPSHOT_STALE_MS >
                API_REFRESH_INTERVAL_MS +
-               API_REFRESH_RPC_COUNT * API_REFRESH_RPC_BUDGET_MS,
+               (API_REFRESH_RPC_COUNT + API_VPN_RPC_COUNT) * API_REFRESH_RPC_BUDGET_MS,
                "snapshot stale threshold must exceed a full refresh cycle");
 
 _Static_assert(sizeof(api_snapshot_t) <= PIPE_BUF,
@@ -73,11 +74,28 @@ static void api_refresh_candidate(api_ctx_t *ctx, api_snapshot_t *next) {
     api_native_unlock(ctx);
 }
 
+static void api_apply_vpn_mode(api_ctx_t *ctx, const api_vpn_request_t *request);
+
+static void api_wake_worker(api_ctx_t *ctx) {
+    uint64_t wake = 1;
+    while (write(ctx->wake_fd, &wake, sizeof(wake)) < 0 && errno == EINTR) {
+    }
+}
+
 static void *api_refresh_worker(void *userdata) {
     api_ctx_t *ctx = userdata;
-    struct pollfd stop = { .fd = ctx->stop_fd, .events = POLLIN };
+    struct pollfd wake = { .fd = ctx->wake_fd, .events = POLLIN };
 
     for (;;) {
+        pthread_mutex_lock(&ctx->request_lock);
+        bool stopping = ctx->stopping;
+        bool pending = ctx->vpn_pending;
+        api_vpn_request_t request = ctx->vpn_request;
+        ctx->vpn_pending = false;
+        pthread_mutex_unlock(&ctx->request_lock);
+        if (stopping) break;
+        if (pending) api_apply_vpn_mode(ctx, &request);
+
         api_snapshot_t next;
         api_refresh_candidate(ctx, &next);
         ssize_t written;
@@ -87,9 +105,14 @@ static void *api_refresh_worker(void *userdata) {
 
         int ready;
         do {
-            ready = poll(&stop, 1, API_REFRESH_INTERVAL_MS);
+            ready = poll(&wake, 1, API_REFRESH_INTERVAL_MS);
         } while (ready < 0 && errno == EINTR);
-        if (ready > 0 || (ready < 0 && errno != EINTR)) break;
+        if (ready < 0 || (wake.revents & (POLLERR | POLLHUP | POLLNVAL))) break;
+        if (ready > 0) {
+            uint64_t value;
+            while (read(ctx->wake_fd, &value, sizeof(value)) < 0 && errno == EINTR) {
+            }
+        }
     }
     return NULL;
 }
@@ -124,13 +147,18 @@ int api_init(api_ctx_t *ctx, atp_config_t *cfg) {
     memset(ctx, 0, sizeof(api_ctx_t));
     ctx->result_pipe[0] = -1;
     ctx->result_pipe[1] = -1;
-    ctx->stop_fd = -1;
+    ctx->wake_fd = -1;
     ctx->config = cfg;
 
     if (pthread_mutex_init(&ctx->native_lock, NULL) != 0) return -1;
+    if (pthread_mutex_init(&ctx->request_lock, NULL) != 0) {
+        pthread_mutex_destroy(&ctx->native_lock);
+        return -1;
+    }
     ctx->initialized = true;
     if (singbox_api_init(&ctx->native_ctx, cfg) != 0) {
         pthread_mutex_destroy(&ctx->native_lock);
+        pthread_mutex_destroy(&ctx->request_lock);
         ctx->initialized = false;
         return -1;
     }
@@ -144,9 +172,10 @@ void api_cleanup(api_ctx_t *ctx) {
     if (!ctx || !ctx->initialized) return;
 
     if (ctx->worker_started) {
-        uint64_t stop = 1;
-        while (write(ctx->stop_fd, &stop, sizeof(stop)) < 0 && errno == EINTR) {
-        }
+        pthread_mutex_lock(&ctx->request_lock);
+        ctx->stopping = true;
+        pthread_mutex_unlock(&ctx->request_lock);
+        api_wake_worker(ctx);
         pthread_join(ctx->refresh_worker, NULL);
         ctx->worker_started = false;
     }
@@ -156,22 +185,23 @@ void api_cleanup(api_ctx_t *ctx) {
     }
     if (ctx->result_pipe[0] >= 0) close(ctx->result_pipe[0]);
     if (ctx->result_pipe[1] >= 0) close(ctx->result_pipe[1]);
-    if (ctx->stop_fd >= 0) close(ctx->stop_fd);
+    if (ctx->wake_fd >= 0) close(ctx->wake_fd);
 
     singbox_api_cleanup(&ctx->native_ctx);
     pthread_mutex_destroy(&ctx->native_lock);
+    pthread_mutex_destroy(&ctx->request_lock);
     memset(ctx, 0, sizeof(*ctx));
     ctx->result_pipe[0] = -1;
     ctx->result_pipe[1] = -1;
-    ctx->stop_fd = -1;
+    ctx->wake_fd = -1;
 }
 
 int api_start_with_reactor(api_ctx_t *ctx, reactor_t *r) {
     if (!ctx || !ctx->initialized || !r || ctx->worker_started) return -1;
 
     if (pipe2(ctx->result_pipe, O_CLOEXEC | O_NONBLOCK) != 0) return -1;
-    ctx->stop_fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
-    if (ctx->stop_fd < 0) goto fail;
+    ctx->wake_fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+    if (ctx->wake_fd < 0) goto fail;
 
     ctx->reactor = r;
     if (reactor_add_fd(r, ctx->result_pipe[0], REACTOR_EVENT_READ,
@@ -207,10 +237,10 @@ fail:
     }
     if (ctx->result_pipe[0] >= 0) close(ctx->result_pipe[0]);
     if (ctx->result_pipe[1] >= 0) close(ctx->result_pipe[1]);
-    if (ctx->stop_fd >= 0) close(ctx->stop_fd);
+    if (ctx->wake_fd >= 0) close(ctx->wake_fd);
     ctx->result_pipe[0] = -1;
     ctx->result_pipe[1] = -1;
-    ctx->stop_fd = -1;
+    ctx->wake_fd = -1;
     ctx->reactor = NULL;
     return -1;
 }
@@ -281,21 +311,35 @@ static int api_get_clash_mode_status_sync(api_ctx_t *ctx,
 
 void api_vpn_mode_callback(vpn_state_t state, const char *iface, void *userdata) {
     api_ctx_t *ctx = userdata;
-    if (!ctx) return;
+    (void)iface;
+    if (!ctx || !ctx->initialized) return;
 
     if (!ctx->config || !ctx->config->interface.vpn_auto_mode) {
         return;
     }
 
-    if (state == VPN_STATE_PREDICTING || state == VPN_STATE_TEARDOWN) {
+    if (state != VPN_STATE_READY && state != VPN_STATE_IDLE) {
         /* The debounced READY/IDLE transition is the stable sync point. */
         return;
     }
 
-    const char *target_mode = ctx->config->interface.vpn_target_mode[0] ?
-                              ctx->config->interface.vpn_target_mode : "Google VPN";
-    const char *fallback_mode = ctx->config->interface.vpn_fallback_mode[0] ?
-                                ctx->config->interface.vpn_fallback_mode : "Rule";
+    /* Config is reactor-owned; copy desired settings before handing off. */
+    pthread_mutex_lock(&ctx->request_lock);
+    ctx->vpn_request.state = state;
+    snprintf(ctx->vpn_request.target_mode, sizeof(ctx->vpn_request.target_mode),
+             "%s", ctx->config->interface.vpn_target_mode[0] ?
+             ctx->config->interface.vpn_target_mode : "Google VPN");
+    snprintf(ctx->vpn_request.fallback_mode, sizeof(ctx->vpn_request.fallback_mode),
+             "%s", ctx->config->interface.vpn_fallback_mode[0] ?
+             ctx->config->interface.vpn_fallback_mode : "Rule");
+    ctx->vpn_pending = true;
+    pthread_mutex_unlock(&ctx->request_lock);
+    if (ctx->worker_started) api_wake_worker(ctx);
+}
+
+static void api_apply_vpn_mode(api_ctx_t *ctx, const api_vpn_request_t *request) {
+    const char *target_mode = request->target_mode;
+    const char *fallback_mode = request->fallback_mode;
 
     singbox_clash_mode_status_t status;
     if (api_get_clash_mode_status_sync(ctx, &status) != 0) {
@@ -303,7 +347,7 @@ void api_vpn_mode_callback(vpn_state_t state, const char *iface, void *userdata)
         return;
     }
 
-    if (state == VPN_STATE_IDLE) {
+    if (request->state == VPN_STATE_IDLE) {
         if (!ctx->default_mode[0]) {
             return;
         }
@@ -341,8 +385,8 @@ void api_vpn_mode_callback(vpn_state_t state, const char *iface, void *userdata)
         LOG_WARN("Native API: failed to switch Clash mode to %s", target_mode);
         return;
     }
-    LOG_INFO("Native API: VPN state READY (%s) selected Clash mode '%s' (restore=%s)",
-             (iface && iface[0]) ? iface : "vpn", target_mode,
+    LOG_INFO("Native API: VPN state READY selected Clash mode '%s' (restore=%s)",
+             target_mode,
              ctx->default_mode[0] ? ctx->default_mode : fallback_mode);
 }
 
