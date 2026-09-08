@@ -201,6 +201,8 @@ jobs:
       full_version: ${{ steps.version-meta.outputs.full_version }}
 
     env:
+      # Release and integration runners may have different CPU features.
+      EXTRA_CFLAGS: "-march=x86-64 -mtune=core2"
       CCACHE_DIR: /home/runner/.cache/ccache
       CCACHE_COMPRESS: "1"
       CCACHE_MAXSIZE: "2G"

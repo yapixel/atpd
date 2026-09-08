@@ -39,6 +39,7 @@ CFLAGS += -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3
 endif
 endif
 CFLAGS += -Ibuild/generated
+CFLAGS += $(EXTRA_CFLAGS)
 
 LIBS = -lpthread $(SANITIZER_LIBS)
 
