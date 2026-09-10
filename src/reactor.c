@@ -145,6 +145,7 @@ static void process_expired_timers(reactor_t *r, reactor_private_t *priv) {
         // FIX 1: Pass the actual heap-allocated public_timer to avoid stack-pointer free crash
         if (timer->active && timer->callback) {
             if (timer->public_timer) {
+                priv->stats.timers_fired++;
                 timer->callback(r, timer->public_timer, timer->userdata);
             }
         }

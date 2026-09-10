@@ -62,6 +62,8 @@ CLI_TEST = build/tests/test_cli
 STATUS_RENDER_TEST = build/tests/test_status_render
 UTILS_PROC_STAT_TEST = build/tests/test_utils_proc_stat
 SERVICE_CREDENTIALS_TEST = build/tests/test_service_credentials
+API_HOST_TEST = build/tests/test_api_host
+REACTOR_TIMERS_TEST = build/tests/test_reactor_timers
 
 .PHONY: all test clean distclean install uninstall check-zig
 
@@ -71,7 +73,7 @@ check-zig: .zig-version
 
 all: check-zig $(TARGET)
 
-test: check-zig $(TARGET) $(VPN_MODE_TEST) $(API_SNAPSHOT_TEST) $(LOGGER_SAFETY_TEST) $(RESULT_TEST) $(VERSION_TEST) $(CONFIG_VALUE_TEST) $(CONTEXT_TEST) $(CLI_TEST) $(STATUS_RENDER_TEST) $(UTILS_PROC_STAT_TEST) $(SERVICE_CREDENTIALS_TEST)
+test: check-zig $(TARGET) $(VPN_MODE_TEST) $(API_SNAPSHOT_TEST) $(LOGGER_SAFETY_TEST) $(RESULT_TEST) $(VERSION_TEST) $(CONFIG_VALUE_TEST) $(CONTEXT_TEST) $(CLI_TEST) $(STATUS_RENDER_TEST) $(UTILS_PROC_STAT_TEST) $(SERVICE_CREDENTIALS_TEST) $(API_HOST_TEST) $(REACTOR_TIMERS_TEST)
 	$(VPN_MODE_TEST)
 	$(API_SNAPSHOT_TEST)
 	$(LOGGER_SAFETY_TEST)
@@ -83,6 +85,8 @@ test: check-zig $(TARGET) $(VPN_MODE_TEST) $(API_SNAPSHOT_TEST) $(LOGGER_SAFETY_
 	$(STATUS_RENDER_TEST)
 	$(UTILS_PROC_STAT_TEST)
 	$(SERVICE_CREDENTIALS_TEST)
+	$(API_HOST_TEST)
+	$(REACTOR_TIMERS_TEST)
 	sh tests/test_config_validation.sh $(TARGET)
 	sh tests/test_start_restart_preflight.sh
 	sh tests/test_android_service.sh
@@ -131,6 +135,14 @@ $(SERVICE_CREDENTIALS_TEST): tests/test_service_credentials.c src/service_creden
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
+$(API_HOST_TEST): tests/test_api_host.c src/singbox_api.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -Wl,-wrap,connect -o $@ $^ $(LIBS)
+
+$(REACTOR_TIMERS_TEST): tests/test_reactor_timers.c src/reactor.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
+
 install: $(TARGET)
 	install -d $(DESTDIR)$(BINDIR)
 	install -d $(DESTDIR)$(RUNDIR)
@@ -152,7 +164,7 @@ FORCE:
 $(OBJ): $(VERSION_HEADER)
 $(OBJDIR)/src/version.o: $(VERSION_HEADER)
 
-$(OBJ) $(VPN_MODE_TEST) $(API_SNAPSHOT_TEST) $(LOGGER_SAFETY_TEST) $(RESULT_TEST) $(VERSION_TEST) $(CONFIG_VALUE_TEST) $(CONTEXT_TEST) $(CLI_TEST) $(STATUS_RENDER_TEST) $(UTILS_PROC_STAT_TEST) $(SERVICE_CREDENTIALS_TEST): | check-zig
+$(OBJ) $(VPN_MODE_TEST) $(API_SNAPSHOT_TEST) $(LOGGER_SAFETY_TEST) $(RESULT_TEST) $(VERSION_TEST) $(CONFIG_VALUE_TEST) $(CONTEXT_TEST) $(CLI_TEST) $(STATUS_RENDER_TEST) $(UTILS_PROC_STAT_TEST) $(SERVICE_CREDENTIALS_TEST) $(API_HOST_TEST) $(REACTOR_TIMERS_TEST): | check-zig
 
 $(OBJDIR)/%.o: %.c
 	@mkdir -p $(dir $@)

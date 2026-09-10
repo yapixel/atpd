@@ -6,6 +6,7 @@
  */
 
 #include "config_validator.h"
+#include <arpa/inet.h>
 #include <string.h>
 
 static const config_key_spec_t CONFIG_SCHEMA[] = {
@@ -91,6 +92,8 @@ int config_validate_values(const atp_config_t *cfg) {
     int errors = 0;
 
     errors += validate_port(cfg->api.port) ? 1 : 0;
+    struct in_addr address;
+    errors += inet_pton(AF_INET, cfg->api.host, &address) == 1 ? 0 : 1;
     errors += validate_service_params(cfg);
 
     if (cfg->service.restart_delay_sec < 0 || cfg->service.restart_delay_sec > 3600) {

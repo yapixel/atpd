@@ -113,7 +113,10 @@ int singbox_api_health_check(singbox_api_ctx_t *ctx) {
     sa.sin_family = AF_INET;
     sa.sin_port = htons((uint16_t)port);
     if (inet_pton(AF_INET, host, &sa.sin_addr) <= 0) {
-        sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        close(sock);
+        ctx->connected = 0;
+        ctx->last_check = safe_time_now();
+        return -1;
     }
 
     int ret = connect(sock, (struct sockaddr *)&sa, sizeof(sa));
@@ -262,7 +265,8 @@ int singbox_api_get_status(singbox_api_ctx_t *ctx, singbox_status_t *status_out)
     sa.sin_family = AF_INET;
     sa.sin_port = htons((uint16_t)port);
     if (inet_pton(AF_INET, host, &sa.sin_addr) <= 0) {
-        sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        close(sock);
+        return -1;
     }
 
     int ret = connect(sock, (struct sockaddr *)&sa, sizeof(sa));
@@ -381,7 +385,10 @@ static int grpc_web_unary_call(const singbox_api_ctx_t *ctx, const char *path,
     memset(&sa, 0, sizeof(sa));
     sa.sin_family = AF_INET;
     sa.sin_port = htons((uint16_t)port);
-    if (inet_pton(AF_INET, host, &sa.sin_addr) <= 0) sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (inet_pton(AF_INET, host, &sa.sin_addr) <= 0) {
+        close(sock);
+        return -1;
+    }
     int ret = connect(sock, (struct sockaddr *)&sa, sizeof(sa));
     if (!(ret == 0 || (errno == EINPROGRESS && wait_connect_ready(sock, 1000)))) {
         close(sock);
