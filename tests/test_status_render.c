@@ -127,6 +127,7 @@ int main(void) {
     assert(strstr(second, "20202") != NULL);
     assert(strstr(second, "10101") == NULL);
     assert(strstr(first, "Peak RSS") != NULL);
+    assert(strstr(first, "Data Path") == NULL);
     assert(strstr(first, "6.1.0-test") != NULL);
 
     const char *headers[] = {
@@ -142,7 +143,9 @@ int main(void) {
         assert(strstr(narrow, headers[i]) == NULL);
     }
     assert(strstr(narrow, "=== ATPD DAEMON ===") != NULL);
-    assert(strstr(narrow, "[INFO]") != NULL);
+    assert(strstr(narrow, "State: STANDALONE / DIRECT") != NULL);
+    assert(strstr(narrow_emoji, "State: STANDALONE / DIRECT") != NULL);
+    assert(strstr(narrow_emoji, "ℹ") == NULL);
     assert(strstr(narrow_emoji, "\033[") == NULL);
     assert(strstr(narrow, "\n    Kernel: ") != NULL);
     assert(strstr(narrow, "6.1.0-test-kernel-release") == NULL);

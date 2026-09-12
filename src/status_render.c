@@ -165,8 +165,7 @@ static void render_vpn(ui_render_ctx_t *ui, const status_snapshot_t *snapshot) {
     ui_table_begin(ui);
     ui_table_header(ui, "🌐", "VPN TUNNEL STATUS");
     if (snapshot->vpn.state != VPN_STATE_READY || !snapshot->vpn.iface[0]) {
-        ui_table_row_color(ui, ui_emoji_info(ui), "STANDALONE / DIRECT", COLOR_GREEN);
-        ui_table_subrow(ui, "└─", "Data Path", "sing-box ebpf inbound");
+        ui_table_row_color(ui, "State", "STANDALONE / DIRECT", COLOR_GREEN);
         ui_table_end(ui);
         return;
     }

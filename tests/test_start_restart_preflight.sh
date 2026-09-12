@@ -382,7 +382,7 @@ SERVICE_HEALTH_CHECK_INTERVAL=5000
 EOF
 run_atp status > "$root/invalid-candidate-status.out"
 grep -q 'Native API (Port 19080)' "$root/invalid-candidate-status.out"
-grep -q 'ℹ.*STANDALONE / DIRECT' "$root/invalid-candidate-status.out"
+grep -q '🌐 VPN TUNNEL STATUS' "$root/invalid-candidate-status.out"
 
 # A resolved restart-required change is rejected before any owner is applied.
 restart_before=$(grep -c 'REQUIRES_RESTART' "$root/run/atp.log" 2>/dev/null || true)
@@ -402,7 +402,7 @@ kill -0 "$reload_pid"
 kill -0 "$reload_child_pid"
 run_atp status > "$root/restart-required-status.out"
 grep -q 'Native API (Port 19080)' "$root/restart-required-status.out"
-grep -q 'ℹ.*STANDALONE / DIRECT' "$root/restart-required-status.out"
+grep -q '🌐 VPN TUNNEL STATUS' "$root/restart-required-status.out"
 
 # A hot-only candidate is applied without restarting ATPD or sing-box.
 success_before=$(grep -c 'Config reload completed successfully' "$root/run/atp.log" 2>/dev/null || true)
@@ -420,8 +420,8 @@ wait_for_log 'Config reload completed successfully' "$success_before"
 [ "$(read_atpd_pid "$root/run/atpd.pid")" = "$reload_pid" ]
 [ "$(sed -n '1p' "$root/run/sing-box.pid")" = "$reload_child_pid" ]
 run_atp status > "$root/hot-reload-status.out"
-grep -q '\[INFO\].*STANDALONE / DIRECT' "$root/hot-reload-status.out"
-! grep -q 'ℹ.*STANDALONE / DIRECT' "$root/hot-reload-status.out"
+grep -q 'State.*STANDALONE / DIRECT' "$root/hot-reload-status.out"
+! grep -q '🌐 VPN TUNNEL STATUS' "$root/hot-reload-status.out"
 run_atp stop >/dev/null
 
 printf '%s\n' '=== main PID identity rejects stale and foreign processes ==='

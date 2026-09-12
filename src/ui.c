@@ -206,10 +206,6 @@ void ui_table_end(ui_render_ctx_t *ctx) {
     ui_printf(ctx, "\n");
 }
 
-const char *ui_emoji_info(const ui_render_ctx_t *ctx) {
-    return ctx && ctx->emoji_enabled ? "ℹ" : "[INFO]";
-}
-
 const char *ui_emoji_vpn(const ui_render_ctx_t *ctx, int connected) {
     if (ctx && ctx->emoji_enabled) return connected ? "🔒" : "🔓";
     return "[VPN]";
