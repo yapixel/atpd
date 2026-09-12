@@ -455,6 +455,15 @@ write_identity "$identity_pid" "$identity_starttime"
 wait "$identity_pid" 2>/dev/null || true
 [ ! -e "$root/identity/run/atpd.pid" ]
 
+# Replacing the executable leaves the running process marked "(deleted)".
+start_identity_process "$root/identity/atpd"
+write_identity "$identity_pid" "$identity_starttime"
+cp "$root/identity/atpd-helper" "$root/identity/atpd.new"
+mv "$root/identity/atpd.new" "$root/identity/atpd"
+"$ATPD_BIN" -c "$root/identity.conf" stop >/dev/null
+wait "$identity_pid" 2>/dev/null || true
+[ ! -e "$root/identity/run/atpd.pid" ]
+
 # Prefix matches are not identities: atpd-helper must never receive SIGHUP.
 start_identity_process "$root/identity/atpd-helper"
 write_identity "$identity_pid" "$identity_starttime"

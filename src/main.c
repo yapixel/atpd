@@ -160,7 +160,7 @@ static int process_is_atpd(pid_t pid) {
     char *base = basename(exe_copy);
     if (!base) return 0;
 
-    return strcmp(base, "atpd") == 0;
+    return strcmp(base, "atpd") == 0 || strcmp(base, "atpd (deleted)") == 0;
 }
 
 static int read_pid_identity(const char *pid_file, pid_identity_t *identity) {
