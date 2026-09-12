@@ -78,7 +78,7 @@ static void render_atpd(ui_render_ctx_t *ui, const status_snapshot_t *snapshot) 
     format_int(snapshot->atpd_thread_count, threads, sizeof(threads));
 
     ui_table_begin(ui);
-    ui_table_header(ui, "ATPD DAEMON");
+    ui_table_header(ui, "🚀", "ATPD DAEMON");
     ui_table_row_color(ui, "State", snapshot->daemon_running ? "RUNNING" : "STOPPED",
                        snapshot->daemon_running ? COLOR_GREEN : COLOR_YELLOW);
     if (snapshot->daemon_running) ui_table_subrow_int(ui, "├─", "PID", snapshot->atpd_pid);
@@ -92,7 +92,7 @@ static void render_atpd(ui_render_ctx_t *ui, const status_snapshot_t *snapshot) 
 
 static void render_proxy(ui_render_ctx_t *ui, const status_snapshot_t *snapshot) {
     ui_table_begin(ui);
-    ui_table_header(ui, "PROXY CORE");
+    ui_table_header(ui, "📦", "PROXY CORE");
     ui_table_row_color(ui, "STATUS", service_display_state(snapshot),
                        service_display_color(snapshot));
     if (snapshot->singbox_pid <= 0) {
@@ -134,7 +134,7 @@ static void render_api(ui_render_ctx_t *ui, const status_snapshot_t *snapshot) {
     char api[64];
     snprintf(api, sizeof(api), "Native API (Port %d)", snapshot->api_port);
     ui_table_begin(ui);
-    ui_table_header(ui, "NATIVE API & MODE");
+    ui_table_header(ui, "🔌", "NATIVE API & MODE");
     ui_table_subrow(ui, "├─", "API Engine", api);
     ui_table_subrow_color(ui, "└─", "Clash Mode",
                           snapshot->native_api.clash_mode_valid ?
@@ -145,7 +145,7 @@ static void render_api(ui_render_ctx_t *ui, const status_snapshot_t *snapshot) {
 
 static void render_monitors(ui_render_ctx_t *ui, const status_snapshot_t *snapshot) {
     ui_table_begin(ui);
-    ui_table_header(ui, "MONITORS & SENSING");
+    ui_table_header(ui, "📡", "MONITORS & SENSING");
     ui_table_subrow_color(ui, "├─", "Netlink Listener",
                           snapshot->netlink_listener_active ? "ACTIVE" : "INACTIVE",
                           snapshot->netlink_listener_active ? COLOR_GREEN : COLOR_YELLOW);
@@ -163,7 +163,7 @@ static void render_monitors(ui_render_ctx_t *ui, const status_snapshot_t *snapsh
 
 static void render_vpn(ui_render_ctx_t *ui, const status_snapshot_t *snapshot) {
     ui_table_begin(ui);
-    ui_table_header(ui, "VPN TUNNEL STATUS");
+    ui_table_header(ui, "🌐", "VPN TUNNEL STATUS");
     if (snapshot->vpn.state != VPN_STATE_READY || !snapshot->vpn.iface[0]) {
         ui_table_row_color(ui, ui_emoji_info(ui), "STANDALONE / DIRECT", COLOR_GREEN);
         ui_table_subrow(ui, "└─", "Data Path", "sing-box ebpf inbound");
@@ -192,7 +192,7 @@ static void render_system(ui_render_ctx_t *ui, const status_snapshot_t *snapshot
     else snprintf(temperature, sizeof(temperature), "%d°C", snapshot->cpu_temperature_c);
 
     ui_table_begin(ui);
-    ui_table_header(ui, "SYSTEM");
+    ui_table_header(ui, "💻", "SYSTEM");
     ui_table_subrow(ui, "├─", "ATPD Version", atp_get_full_version());
     ui_table_subrow(ui, "├─", "Kernel",
                     snapshot->kernel_release[0] ? snapshot->kernel_release : "N/A");
@@ -209,7 +209,7 @@ void status_render_snapshot_width(FILE *out, bool no_color,
     ui_render_ctx_t ui;
     ui_render_ctx_init(&ui, target, width, color, snapshot->emoji_enabled);
 
-    ui_title(&ui, "ATPD Status");
+    ui_title(&ui, snapshot->emoji_enabled ? "📊 ATPD Status" : "ATPD Status");
     render_atpd(&ui, snapshot);
     ui_blank(&ui);
     render_proxy(&ui, snapshot);

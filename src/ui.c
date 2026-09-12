@@ -105,21 +105,24 @@ void ui_table_begin(ui_render_ctx_t *ctx) {
     (void)ctx;
 }
 
-void ui_table_header(ui_render_ctx_t *ctx, const char *title) {
+void ui_table_header(ui_render_ctx_t *ctx, const char *emoji, const char *title) {
     if (!ctx) return;
     const char *safe_title = title ? title : "";
+    const char *icon = ctx->emoji_enabled && emoji ? emoji : "";
+    const char *space = icon[0] ? " " : "";
     if (ctx->width < 60) {
-        ui_printf(ctx, "\n=== %s ===\n", safe_title);
+        ui_printf(ctx, "\n=== %s%s%s ===\n", icon, space, safe_title);
         return;
     }
-    int title_len = (int)strlen(safe_title);
+    /* Titles are ASCII; each supplied icon occupies two terminal columns. */
+    int title_len = (int)strlen(safe_title) + (icon[0] ? 3 : 0);
     int total_pad = ctx->width - 4 - title_len;
     if (total_pad < 0) total_pad = 0;
     int left = total_pad / 2;
     int right = total_pad - left;
     ui_printf(ctx, "\n");
     for (int i = 0; i < left; i++) ui_printf(ctx, "=");
-    ui_printf(ctx, " %s ", safe_title);
+    ui_printf(ctx, " %s%s%s ", icon, space, safe_title);
     for (int i = 0; i < right; i++) ui_printf(ctx, "=");
     ui_printf(ctx, "\n\n");
 }

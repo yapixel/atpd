@@ -22,7 +22,7 @@ void ui_render_ctx_init(ui_render_ctx_t *ctx, FILE *out, int width,
 void ui_title(ui_render_ctx_t *ctx, const char *title);
 void ui_blank(ui_render_ctx_t *ctx);
 void ui_table_begin(ui_render_ctx_t *ctx);
-void ui_table_header(ui_render_ctx_t *ctx, const char *title);
+void ui_table_header(ui_render_ctx_t *ctx, const char *emoji, const char *title);
 void ui_table_row_color(ui_render_ctx_t *ctx, const char *label,
                         const char *value, const char *color);
 void ui_table_subrow(ui_render_ctx_t *ctx, const char *prefix,

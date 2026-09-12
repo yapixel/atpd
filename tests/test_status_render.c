@@ -39,8 +39,9 @@ static char *render_with_pid(pid_t pid) {
     return buffer;
 }
 
-static char *render_narrow(void) {
+static char *render_narrow(bool emoji_enabled) {
     status_snapshot_t snapshot = {0};
+    snapshot.emoji_enabled = emoji_enabled;
     snapshot.daemon_running = true;
     snapshot.atpd_pid = 10101;
     snapshot.singbox_state = SERVICE_RUNNING;
@@ -128,7 +129,21 @@ int main(void) {
     assert(strstr(first, "Peak RSS") != NULL);
     assert(strstr(first, "6.1.0-test") != NULL);
 
-    char *narrow = render_narrow();
+    const char *headers[] = {
+        "📊 ATPD Status", "🚀 ATPD DAEMON", "📦 PROXY CORE",
+        "🔌 NATIVE API & MODE", "📡 MONITORS & SENSING",
+        "🌐 VPN TUNNEL STATUS", "💻 SYSTEM"
+    };
+    char *narrow_emoji = render_narrow(true);
+    char *narrow = render_narrow(false);
+    for (size_t i = 0; i < sizeof(headers) / sizeof(headers[0]); i++) {
+        assert(strstr(first, headers[i]) != NULL);
+        assert(strstr(narrow_emoji, headers[i]) != NULL);
+        assert(strstr(narrow, headers[i]) == NULL);
+    }
+    assert(strstr(narrow, "=== ATPD DAEMON ===") != NULL);
+    assert(strstr(narrow, "[INFO]") != NULL);
+    assert(strstr(narrow_emoji, "\033[") == NULL);
     assert(strstr(narrow, "\n    Kernel: ") != NULL);
     assert(strstr(narrow, "6.1.0-test-kernel-release") == NULL);
 
@@ -178,6 +193,7 @@ int main(void) {
     free(first);
     free(second);
     free(narrow);
+    free(narrow_emoji);
     free(summary);
     free(active);
     free(standby);
