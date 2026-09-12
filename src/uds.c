@@ -132,7 +132,7 @@ static int check_client_uid(int fd) {
     return 1;
 }
 
-static void handle_status(uds_client_t *client, bool summary) {
+static void handle_status(uds_client_t *client, bool summary, int width) {
     char *buf = NULL;
     size_t size = 0;
     FILE *mem = open_memstream(&buf, &size);
@@ -141,8 +141,13 @@ static void handle_status(uds_client_t *client, bool summary) {
             status_show_summary_to(mem, g_uds_dependencies.config,
                                    g_uds_dependencies.service, g_uds_dependencies.api);
         } else {
-            status_show_to(mem, true, g_uds_dependencies.config,
-                           g_uds_dependencies.service, g_uds_dependencies.api);
+            status_snapshot_t snapshot;
+            if (status_collect_snapshot(g_uds_dependencies.config,
+                                        g_uds_dependencies.service,
+                                        g_uds_dependencies.api,
+                                        &snapshot) == 0) {
+                status_render_snapshot_width(mem, true, &snapshot, width);
+            }
         }
         fclose(mem);
 
@@ -277,9 +282,17 @@ static void process_command(uds_client_t *client, const char *cmd, size_t cmd_le
     }
 
     if (strcmp(buf, "status") == 0) {
-        handle_status(client, false);
+        handle_status(client, false, 0);
+    } else if (strncmp(buf, "status ", 7) == 0) {
+        char *endptr;
+        long width = strtol(buf + 7, &endptr, 10);
+        if (*endptr != '\0' || width < 30 || width > 200) {
+            client_queue_string(client, "ERROR: invalid status width\n");
+        } else {
+            handle_status(client, false, (int)width);
+        }
     } else if (strcmp(buf, "status-summary") == 0) {
-        handle_status(client, true);
+        handle_status(client, true, 0);
     } else if (strcmp(buf, "stop") == 0) {
         handle_stop(client);
     } else if (strcmp(buf, "ping") == 0) {

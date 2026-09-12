@@ -50,6 +50,9 @@ int status_collect_snapshot(const atp_config_t *cfg, const service_ctx_t *svc,
                             status_snapshot_t *out);
 void status_render_snapshot(FILE *out, bool no_color,
                             const status_snapshot_t *snapshot);
+void status_render_snapshot_width(FILE *out, bool no_color,
+                                  const status_snapshot_t *snapshot,
+                                  int width);
 void status_render_summary(FILE *out, const status_snapshot_t *snapshot);
 void status_show_to(FILE *out, bool no_color, const atp_config_t *cfg,
                     const service_ctx_t *svc, const api_ctx_t *api);

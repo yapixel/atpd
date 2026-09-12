@@ -200,13 +200,14 @@ static void render_system(ui_render_ctx_t *ui, const status_snapshot_t *snapshot
     ui_table_end(ui);
 }
 
-void status_render_snapshot(FILE *out, bool no_color,
-                            const status_snapshot_t *snapshot) {
+void status_render_snapshot_width(FILE *out, bool no_color,
+                                  const status_snapshot_t *snapshot,
+                                  int width) {
     if (!snapshot) return;
     FILE *target = out ? out : stdout;
     bool color = !no_color && isatty(fileno(target));
     ui_render_ctx_t ui;
-    ui_render_ctx_init(&ui, target, 0, color, snapshot->emoji_enabled);
+    ui_render_ctx_init(&ui, target, width, color, snapshot->emoji_enabled);
 
     ui_title(&ui, "ATPD Status");
     render_atpd(&ui, snapshot);
@@ -220,6 +221,11 @@ void status_render_snapshot(FILE *out, bool no_color,
     render_vpn(&ui, snapshot);
     ui_blank(&ui);
     render_system(&ui, snapshot);
+}
+
+void status_render_snapshot(FILE *out, bool no_color,
+                            const status_snapshot_t *snapshot) {
+    status_render_snapshot_width(out, no_color, snapshot, 0);
 }
 
 void status_render_summary(FILE *out, const status_snapshot_t *snapshot) {

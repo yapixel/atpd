@@ -32,6 +32,7 @@
 #include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/ioctl.h>
 #include <fcntl.h>
 #include <errno.h>
 #include <libgen.h>
@@ -766,9 +767,24 @@ static int do_restart(atp_options_t *opts) {
     return do_start(opts);
 }
 
+static int terminal_width(void) {
+    struct winsize window;
+    if (isatty(STDOUT_FILENO) &&
+        ioctl(STDOUT_FILENO, TIOCGWINSZ, &window) == 0 &&
+        window.ws_col > 0) {
+        return window.ws_col < 30 ? 30 : window.ws_col;
+    }
+    return 0;
+}
+
 static int do_status(atp_options_t *opts) {
     /* 1. Fast-Path: Query running daemon over Unix Domain Socket (< 0.5 ms) */
-    if (query_daemon("status\n") == 0) return 0;
+    char command[32];
+    int width = terminal_width();
+    if (width > 200) width = 200;
+    if (width > 0) snprintf(command, sizeof(command), "status %d\n", width);
+    else snprintf(command, sizeof(command), "status\n");
+    if (query_daemon(command) == 0) return 0;
 
     /* 2. Standalone Fallback: Offline inspection when daemon is stopped */
     status_show_to(stdout, opts->no_color, &daemon_config, NULL, NULL);

@@ -127,6 +127,16 @@ void ui_table_header(ui_render_ctx_t *ctx, const char *title) {
 void ui_table_row_color(ui_render_ctx_t *ctx, const char *label,
                         const char *value, const char *color) {
     if (!ctx) return;
+    if (ctx->width < 60) {
+        const char *safe_label = label ? label : "";
+        int max_value = ctx->width - 4 - (int)strlen(safe_label);
+        if (max_value < 1) max_value = 1;
+        char value_buf[512];
+        truncate_utf8(value, value_buf, sizeof(value_buf), max_value);
+        ui_printf(ctx, "  %s%s%s: %s\n", style(ctx, color), safe_label,
+                  reset(ctx), value_buf);
+        return;
+    }
     int label_len = label_width(ctx);
     int max_value = ctx->width - label_len - 6;
     if (max_value < 10) max_value = 10;
@@ -140,6 +150,15 @@ void ui_table_subrow(ui_render_ctx_t *ctx, const char *prefix,
                      const char *label, const char *value) {
     (void)prefix;
     if (!ctx) return;
+    if (ctx->width < 60) {
+        const char *safe_label = label ? label : "";
+        int max_value = ctx->width - 6 - (int)strlen(safe_label);
+        if (max_value < 1) max_value = 1;
+        char value_buf[512];
+        truncate_utf8(value, value_buf, sizeof(value_buf), max_value);
+        ui_printf(ctx, "    %s: %s\n", safe_label, value_buf);
+        return;
+    }
     int label_len = label_width(ctx);
     int max_value = ctx->width - label_len - 8;
     if (max_value < 10) max_value = 10;
@@ -154,6 +173,16 @@ void ui_table_subrow_color(ui_render_ctx_t *ctx, const char *prefix,
                            const char *color) {
     (void)prefix;
     if (!ctx) return;
+    if (ctx->width < 60) {
+        const char *safe_label = label ? label : "";
+        int max_value = ctx->width - 6 - (int)strlen(safe_label);
+        if (max_value < 1) max_value = 1;
+        char value_buf[512];
+        truncate_utf8(value, value_buf, sizeof(value_buf), max_value);
+        ui_printf(ctx, "    %s%s%s: %s\n", style(ctx, color), safe_label,
+                  reset(ctx), value_buf);
+        return;
+    }
     int label_len = label_width(ctx);
     int max_value = ctx->width - label_len - 8;
     if (max_value < 10) max_value = 10;

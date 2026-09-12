@@ -39,6 +39,26 @@ static char *render_with_pid(pid_t pid) {
     return buffer;
 }
 
+static char *render_narrow(void) {
+    status_snapshot_t snapshot = {0};
+    snapshot.daemon_running = true;
+    snapshot.atpd_pid = 10101;
+    snapshot.singbox_state = SERVICE_RUNNING;
+    snapshot.singbox_pid = 30303;
+    snapshot.singbox_healthy = true;
+    snprintf(snapshot.kernel_release, sizeof(snapshot.kernel_release),
+             "6.1.0-test-kernel-release");
+
+    char *buffer = NULL;
+    size_t size = 0;
+    FILE *stream = open_memstream(&buffer, &size);
+    assert(stream != NULL);
+    status_render_snapshot_width(stream, true, &snapshot, 30);
+    if (fclose(stream) != 0) abort();
+    assert(size > 0);
+    return buffer;
+}
+
 static char *render_with_native_api(bool traffic_available) {
     status_snapshot_t snapshot = {0};
     snapshot.api_port = 9080;
@@ -108,6 +128,10 @@ int main(void) {
     assert(strstr(first, "Peak RSS") != NULL);
     assert(strstr(first, "6.1.0-test") != NULL);
 
+    char *narrow = render_narrow();
+    assert(strstr(narrow, "\n    Kernel: ") != NULL);
+    assert(strstr(narrow, "6.1.0-test-kernel-release") == NULL);
+
     status_snapshot_t summary_snapshot = {0};
     summary_snapshot.daemon_running = true;
     summary_snapshot.atpd_pid = 10101;
@@ -153,6 +177,7 @@ int main(void) {
 
     free(first);
     free(second);
+    free(narrow);
     free(summary);
     free(active);
     free(standby);
