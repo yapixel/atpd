@@ -188,11 +188,6 @@ manual acceptance testing. Existing `atp.sh` users should follow the
     API Engine  Native API (Port 9080)
     Clash Mode  Rule
 
-============================= MONITORS & SENSING =============================
-    Netlink Listener  ACTIVE (Link / Route)
-    XFRM SA Listener  ACTIVE (IPsec Sensing)
-    FCM Push Sensing  STANDBY (System Net Sensing)
-
 ============================= VPN TUNNEL STATUS ==============================
   ℹ  STANDALONE / DIRECT
     Secondary Tunnel  None (sing-box datapath)

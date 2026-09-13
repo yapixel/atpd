@@ -130,10 +130,6 @@ int status_collect_snapshot(const atp_config_t *cfg, const service_ctx_t *svc,
                             &out->singbox_hwm_kb);
     }
 
-    netlink_status_snapshot_t netlink_snapshot;
-    netlink_get_status_snapshot(&netlink_snapshot);
-    out->netlink_listener_active = netlink_snapshot.route_listener_active;
-    out->xfrm_listener_active = netlink_snapshot.xfrm_listener_active;
     atpd_vpn_get_snapshot(&out->vpn);
     if (out->vpn.iface[0] &&
         netlink_get_iface_stats(out->vpn.iface, &out->vpn_rx_bytes,

@@ -36,8 +36,6 @@ typedef struct {
     long singbox_hwm_kb;
     double singbox_cpu_percent;
 
-    bool netlink_listener_active;
-    bool xfrm_listener_active;
     atpd_vpn_snapshot_t vpn;
     bool traffic_available;
     uint64_t vpn_rx_bytes;

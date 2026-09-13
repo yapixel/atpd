@@ -132,7 +132,7 @@ int main(void) {
 
     const char *headers[] = {
         "📊 ATPD Status", "🚀 ATPD DAEMON", "📦 PROXY CORE",
-        "🔌 NATIVE API & MODE", "📡 MONITORS & SENSING",
+        "🔌 NATIVE API & MODE",
         "🌐 VPN TUNNEL STATUS", "💻 SYSTEM"
     };
     char *narrow_emoji = render_narrow(true);
@@ -178,8 +178,11 @@ int main(void) {
     assert(strstr(active, "17") != NULL);
     assert(strstr(active, "1.12.0") != NULL);
     assert(strstr(active, "Rule") != NULL);
-    assert(strstr(active, "ACTIVE (Native API Traffic)") != NULL);
-    assert(strstr(standby, "STANDBY (Native API Traffic)") != NULL);
+    assert(strstr(active, "FCM") == NULL);
+    assert(strstr(active, "MONITORS & SENSING") == NULL);
+    assert(strstr(active, "Netlink Listener") == NULL);
+    assert(strstr(active, "XFRM SA Listener") == NULL);
+    assert(strcmp(active, standby) == 0);
     assert(strstr(active, "owner snapshot unavailable") == NULL);
 
     char *healthy = render_service_state(SERVICE_RUNNING, 40401, true);

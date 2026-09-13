@@ -143,24 +143,6 @@ static void render_api(ui_render_ctx_t *ui, const status_snapshot_t *snapshot) {
     ui_table_end(ui);
 }
 
-static void render_monitors(ui_render_ctx_t *ui, const status_snapshot_t *snapshot) {
-    ui_table_begin(ui);
-    ui_table_header(ui, "📡", "MONITORS & SENSING");
-    ui_table_subrow_color(ui, "├─", "Netlink Listener",
-                          snapshot->netlink_listener_active ? "ACTIVE" : "INACTIVE",
-                          snapshot->netlink_listener_active ? COLOR_GREEN : COLOR_YELLOW);
-    ui_table_subrow_color(ui, "├─", "XFRM SA Listener",
-                          snapshot->xfrm_listener_active ? "ACTIVE" : "INACTIVE",
-                          snapshot->xfrm_listener_active ? COLOR_GREEN : COLOR_YELLOW);
-    const char *fcm = "N/A";
-    if (snapshot->native_api.valid) {
-        fcm = snapshot->native_api.status.traffic_available ?
-              "ACTIVE (Native API Traffic)" : "STANDBY (Native API Traffic)";
-    }
-    ui_table_subrow(ui, "└─", "FCM Push Sensing", fcm);
-    ui_table_end(ui);
-}
-
 static void render_vpn(ui_render_ctx_t *ui, const status_snapshot_t *snapshot) {
     ui_table_begin(ui);
     ui_table_header(ui, "🌐", "VPN TUNNEL STATUS");
@@ -214,8 +196,6 @@ void status_render_snapshot_width(FILE *out, bool no_color,
     render_proxy(&ui, snapshot);
     ui_blank(&ui);
     render_api(&ui, snapshot);
-    ui_blank(&ui);
-    render_monitors(&ui, snapshot);
     ui_blank(&ui);
     render_vpn(&ui, snapshot);
     ui_blank(&ui);

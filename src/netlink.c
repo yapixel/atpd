@@ -578,13 +578,6 @@ int netlink_get_fd(void) {
     return g_async_fd;
 }
 
-void netlink_get_status_snapshot(netlink_status_snapshot_t *out) {
-    if (!out) return;
-    out->route_listener_active = g_async_fd >= 0;
-    out->xfrm_listener_active =
-        g_xfrm_fd >= 0 && atomic_load(&g_xfrm_registered) != 0;
-}
-
 void netlink_set_reactor(reactor_t *r) {
     g_debounce_reactor = r;
 

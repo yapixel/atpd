@@ -159,8 +159,7 @@ status_values_valid() {
     STATUS_CLASH_MODE="$(echo "${clean}" | awk '/Clash Mode/{print $NF; exit}')"
     [[ "${STATUS_GOROUTINES}" =~ ^[1-9][0-9]*$ ]] &&
         [ "${STATUS_VERSION}" = "${EXPECTED_SINGBOX_VERSION}" ] &&
-        [ "${STATUS_CLASH_MODE}" = "Rule" ] &&
-        echo "${clean}" | grep -qE 'FCM Push Sensing[[:space:]]+(ACTIVE|STANDBY) \(Native API Traffic\)'
+        [ "${STATUS_CLASH_MODE}" = "Rule" ]
 }
 
 # --- PRE-CHECK: Validate sing-box config syntax ---
@@ -257,12 +256,10 @@ else
     log_fail "未能通过 Native API 读取默认 Clash mode"
 fi
 
-if echo "${STATUS_OUTPUT}" | sed -r 's/\x1b\[[0-9;]*m//g' | \
-   grep -qE 'FCM Push Sensing[[:space:]]+(ACTIVE|STANDBY) \(Native API Traffic\)'; then
-    log_pass "FCM Push Sensing 反映 Native API trafficAvailable 状态"
+if echo "${STATUS_OUTPUT}" | grep -qE 'FCM|Netlink Listener|XFRM SA Listener|MONITORS & SENSING'; then
+    log_fail "Removed monitor output remains"
 else
-    dump_logs
-    log_fail "FCM Push Sensing 未从 Native API owner snapshot 返回真实状态"
+    log_pass "Removed monitor output absent"
 fi
 
 # Kill only the supervised child. The daemon-owned API snapshot must become
@@ -275,9 +272,7 @@ STALE_SEEN=0
 for _ in {1..40}; do
     CRASH_STATUS="$(./atpd -n status 2>&1)"
     if echo "${CRASH_STATUS}" | sed -r 's/\x1b\[[0-9;]*m//g' | \
-       grep -qE 'Clash Mode[[:space:]]+N/A' && \
-       echo "${CRASH_STATUS}" | sed -r 's/\x1b\[[0-9;]*m//g' | \
-       grep -qE 'FCM Push Sensing[[:space:]]+N/A'; then
+       grep -qE 'Clash Mode[[:space:]]+N/A'; then
         STALE_SEEN=1
         break
     fi

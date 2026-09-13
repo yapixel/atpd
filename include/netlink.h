@@ -28,16 +28,10 @@ typedef enum {
 
 typedef void (*nl_callback_t)(nl_event_type_t event, const char *iface, void *userdata);
 
-typedef struct {
-    bool route_listener_active;
-    bool xfrm_listener_active;
-} netlink_status_snapshot_t;
-
 int netlink_init(nl_callback_t callback, void *userdata);
 void netlink_cleanup(void);
 
 int netlink_get_fd(void);
-void netlink_get_status_snapshot(netlink_status_snapshot_t *out);
 void netlink_handle_event(reactor_t *r, int fd, uint32_t events, void *data);
 
 int netlink_get_iface_stats(const char *iface, uint64_t *rx_bytes, uint64_t *tx_bytes);
